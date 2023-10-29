@@ -19,9 +19,8 @@ contract Prediction is Ownable, ReentrancyGuard {
     mapping(bool => mapping(address => uint)) public rewards;
     mapping(bool => mapping(address => uint)) private _balances;
     mapping(bool => uint) private _totalSupply;
-    // answer
-    bool public isCorrect;
-    bool public isCorrectSet;
+    // connrect or incorrect
+    uint private answer; // 1 - correct, 2 - incorrect
 
     event Predict(address indexed user, bool isCorrect, uint amount);
     event Claim(address indexed user, uint amount);
@@ -69,21 +68,20 @@ contract Prediction is Ownable, ReentrancyGuard {
     /**
      * @dev Claim the bounty
      */
-    function claim() public nonReentrant updateReward(_msgSender(), isCorrect) {
+    function claim() public nonReentrant updateReward(_msgSender(), isCorrect()) {
         require(block.timestamp >= endTime, "You can't claim yet");
-        require(isCorrectSet, "You can't claim yet");
-        uint reward = rewards[isCorrect][_msgSender()];
+        uint reward = rewards[isCorrect()][_msgSender()];
         require(reward > 0, "Nothing to claim");
-        rewards[isCorrect][_msgSender()] = 0;
-        uint rewardRate = _totalSupply[!isCorrect] / (endTime - startTime);
-        uint amount = _balances[isCorrect][_msgSender()] + (reward * rewardRate);
+        rewards[isCorrect()][_msgSender()] = 0;
+        uint rewardRate = _totalSupply[!isCorrect()] / (endTime - startTime);
+        uint amount = _balances[isCorrect()][_msgSender()] + (reward * rewardRate);
         _msgSender().call{ value: amount }("");
         emit Claim(_msgSender(), amount);
     }
 
     function withdrawExpired() public nonReentrant {
         require(block.timestamp >= expiryTime, "You can't withdraw");
-        require(!isCorrectSet, "You can't withdraw");
+        require(answer == 0, "You can't withdraw");
         uint amount = _balances[true][_msgSender()] + _balances[false][_msgSender()];
         _balances[true][_msgSender()] = 0;
         _balances[false][_msgSender()] = 0;
@@ -116,6 +114,11 @@ contract Prediction is Ownable, ReentrancyGuard {
         return ((_balances[_isCorrect][account] * (rewardPerToken(_isCorrect) - userRewardPerTokenPaid[_isCorrect][account])) / 1e18) + rewards[_isCorrect][account];
     }
 
+    function isCorrect() public view returns (bool) {
+        require(answer > 0, "No answer yet");
+        return answer == 1;
+    }
+
     /* ========== ADMIN ========== */
 
     /**
@@ -124,9 +127,8 @@ contract Prediction is Ownable, ReentrancyGuard {
      */
     function setIsCorrect(bool _isCorrect) public onlyOwner() {
         require(block.timestamp >= endTime, "You can't set the correct answer yet");
-        require(!isCorrectSet, "You already set the correct answer");
+        require(answer == 0, "You already set the correct answer");
 
-        isCorrectSet = true;
-        isCorrect = _isCorrect;
+        answer = _isCorrect ? 1 : 2;
     }
 }
