@@ -136,9 +136,7 @@ describe("Prediction", function () {
         const account2Earned = await prediction.earned(account2, false);
         const account3Earned = await prediction.earned(account3, false);
 
-        const total = await prediction.rewardPerTokenStored(false);
-
-        console.log(account2Earned.toString(), account3Earned.toString(), total);
+        console.log(account2Earned.toString(), account3Earned.toString());
 
         expect(BigNumber(account2Earned.toString())).to.be.greaterThan(BigNumber(account3Earned.toString()));
       });
@@ -154,11 +152,9 @@ describe("Prediction", function () {
 
         const amount = ethers.parseUnits("1000", "ether");
 
-        const amountOut = await prediction.getAmount(amount, false);
-
         await expect(prediction.connect(account1).predict(false, { value: amount }))
           .to.emit(prediction, "Predict")
-          .withArgs(account1.address, false, amount, amountOut);
+          .withArgs(account1.address, false, amount);
       });
       it("Should emit an event on claim", async function () {
         const { prediction, startTime, endTime, account1, account2, account3 } = await loadFixture(
@@ -177,14 +173,7 @@ describe("Prediction", function () {
 
         await prediction.setIsCorrect(false);
 
-        const account2PredictionsIncorrect = await prediction.predictionsIncorrect(account2);
-
-        const amountOut = account2PredictionsIncorrect.amount;
-        const initialReserve = await prediction.INITIAL_RESERVE();
-        const reserveIncorrect = await prediction.reserveIncorrect();
-
-        const expectedRevenue = BigNumber(ethers.parseUnits("8.3", "ether").toString())
-          .multipliedBy(amountOut.toString()).dividedBy((initialReserve - reserveIncorrect).toString());
+        const expectedRevenue = BigNumber(ethers.parseUnits(String((1 / 3.3 * 5 + 1)), "ether").toString());
 
         await expect(prediction.connect(account2).claim())
           .to.emit(prediction, "Claim")

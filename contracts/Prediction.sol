@@ -23,7 +23,7 @@ contract Prediction is Ownable, ReentrancyGuard {
     bool public isCorrect;
     bool public isCorrectSet;
 
-    event Predict(address indexed user, bool isCorrect, uint amount, uint amountOut);
+    event Predict(address indexed user, bool isCorrect, uint amount);
     event Claim(address indexed user, uint amount);
 
     constructor(address _owner, string memory _name, uint _startTime, uint _endTime, uint _expiryTime) Ownable(_owner) {
@@ -63,7 +63,7 @@ contract Prediction is Ownable, ReentrancyGuard {
 
         _totalSupply[_isCorrect] = _totalSupply[_isCorrect] + msg.value;
         _balances[_isCorrect][_msgSender()] = _balances[_isCorrect][_msgSender()] + msg.value;
-        emit Predict(_msgSender(), _isCorrect, msg.value, msg.value);
+        emit Predict(_msgSender(), _isCorrect, msg.value);
     }
 
     /**
