@@ -19,7 +19,6 @@ contract Prediction is Ownable, ReentrancyGuard {
     mapping(bool => mapping(address => uint)) public rewards;
     mapping(bool => mapping(address => uint)) private _balances;
     mapping(bool => uint) private _totalSupply;
-    mapping(bool => uint) public _totalRewards;
     // answer
     bool public isCorrect;
     bool public isCorrectSet;
@@ -45,9 +44,7 @@ contract Prediction is Ownable, ReentrancyGuard {
         rewardPerTokenStored[_isCorrect] = rewardPerToken(_isCorrect);
         lastUpdateTime[_isCorrect] = lastTimeRewardApplicable();
         if (account != address(0)) {
-            _totalRewards[_isCorrect] -= rewards[_isCorrect][account];
             rewards[_isCorrect][account] = earned(account, _isCorrect);
-            _totalRewards[_isCorrect] += rewards[_isCorrect][account];
             userRewardPerTokenPaid[_isCorrect][account] = rewardPerTokenStored[_isCorrect];
         }
         _;
@@ -78,7 +75,8 @@ contract Prediction is Ownable, ReentrancyGuard {
         uint reward = rewards[isCorrect][_msgSender()];
         require(reward > 0, "Nothing to claim");
         rewards[isCorrect][_msgSender()] = 0;
-        uint amount = _balances[isCorrect][_msgSender()] + _balances[!isCorrect][_msgSender()] * reward / _totalRewards[isCorrect];
+        uint rewardRate = _totalSupply[!isCorrect] / (endTime - startTime);
+        uint amount = _balances[isCorrect][_msgSender()] + (reward * rewardRate);
         _msgSender().call{ value: amount }("");
         emit Claim(_msgSender(), amount);
     }
@@ -105,7 +103,6 @@ contract Prediction is Ownable, ReentrancyGuard {
     function lastTimeRewardApplicable() public view returns (uint256) {
         return block.timestamp < endTime ? block.timestamp : endTime;
     }
-
 
     function rewardPerToken(bool _isCorrect) public view returns (uint256) {
         if (_totalSupply[_isCorrect] == 0) {

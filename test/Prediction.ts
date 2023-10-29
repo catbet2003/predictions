@@ -125,27 +125,22 @@ describe("Prediction", function () {
 
         await prediction.connect(account2).predict(false, { value: ethers.parseUnits("1", "ether") });
 
-        await prediction.connect(account3).predict(false, { value: ethers.parseUnits("2.3", "ether") });
+        await time.increaseTo(startTime + (endTime - startTime) / 2);
+
+        await prediction.connect(account3).predict(false, { value: ethers.parseUnits("5", "ether") });
 
         await time.increaseTo(endTime);
 
         await prediction.setIsCorrect(false);
 
-        const account2PredictionsIncorrect = await prediction.predictionsIncorrect(account2);
-        const account3PredictionsIncorrect = await prediction.predictionsIncorrect(account3);
+        const account2Earned = await prediction.earned(account2, false);
+        const account3Earned = await prediction.earned(account3, false);
 
-        const amountOut2 = account2PredictionsIncorrect.amount;
-        const amountOut3 = account3PredictionsIncorrect.amount;
-        const initialReserve = await prediction.INITIAL_RESERVE();
-        const reserveIncorrect = await prediction.reserveIncorrect();
+        const total = await prediction.rewardPerTokenStored(false);
 
-        const expectedRevenue2 = BigNumber(ethers.parseUnits("8.3", "ether").toString())
-          .multipliedBy(amountOut2.toString()).dividedBy((initialReserve - reserveIncorrect).toString());
+        console.log(account2Earned.toString(), account3Earned.toString(), total);
 
-        const expectedRevenue3 = BigNumber(ethers.parseUnits("8.3", "ether").toString())
-        .multipliedBy(amountOut3.toString()).dividedBy((initialReserve - reserveIncorrect).toString());
-
-        expect(BigNumber(expectedRevenue2.toFixed(0))).to.be.greaterThan(BigNumber(expectedRevenue3.toFixed(0)));
+        expect(BigNumber(account2Earned.toString())).to.be.greaterThan(BigNumber(account3Earned.toString()));
       });
     });
 
