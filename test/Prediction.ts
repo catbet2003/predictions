@@ -16,33 +16,30 @@ describe("Prediction", function () {
     const THREE_DAYS_IN_SECS = 3 * 24 * 60 * 60;
 
     const startTime = await time.latest() + 60; // 60 seconds in the future
-    const endPredictions = startTime + THREE_DAYS_IN_SECS;
-    const endTime = startTime + ONE_WEEK_IN_SECS;
+    const endTime = startTime + THREE_DAYS_IN_SECS;
+    const expiryTime = startTime + ONE_WEEK_IN_SECS;
 
     // Contracts are deployed using the first signer/account by default
     const [owner, account1, account2, account3] = await ethers.getSigners();
 
     const Registry = await ethers.getContractFactory("PredictionsRegistry");
     const registry = await Registry.deploy();
-    const tx = await registry.createPrediction("Ismail Haniyeh", startTime, endPredictions, endTime);
+    const tx = await registry.createPrediction("Ismail Haniyeh", startTime, endTime, expiryTime);
     const rc: any = await tx.wait();
-    if (!rc || rc.logs.length != 1) {
-      throw new Error("Expected 1 event");
-    }
-    const predictionAddress = rc.logs[0].args[0];
+    const predictionAddress = rc.logs[1].args[0];
     const prediction = await ethers.getContractAt("Prediction", predictionAddress);
     /* const Prediction = await ethers.getContractFactory("Prediction");
     const prediction = await Prediction.deploy("Ismail Haniyeh", startTime, endPredictions, endTime); */
 
-    return { registry, prediction, startTime, endPredictions, endTime, owner, account1, account2, account3 };
+    return { registry, prediction, startTime, endTime, expiryTime, owner, account1, account2, account3 };
   }
 
   describe("Deployment", function () {
     it("Should set the right times", async function () {
-      const { prediction, startTime, endPredictions, endTime } = await loadFixture(deploy);
+      const { prediction, startTime, endTime, expiryTime } = await loadFixture(deploy);
 
       expect(await prediction.startTime()).to.equal(startTime);
-      expect(await prediction.endPredictions()).to.equal(endPredictions);
+      expect(await prediction.expiryTime()).to.equal(expiryTime);
       expect(await prediction.endTime()).to.equal(endTime);
     });
 
@@ -53,10 +50,10 @@ describe("Prediction", function () {
     });
 
     it("Should fail if the startTime is not in the future", async function () {
-      // We don't use the fixture here because we want a different deployment
+      const [owner] = await ethers.getSigners();
       const latestTime = await time.latest();
       const Prediction = await ethers.getContractFactory("Prediction");
-      await expect(Prediction.deploy("test", latestTime, latestTime + 1, latestTime + 2)).to.be.revertedWith(
+      await expect(Prediction.deploy(owner, "test", latestTime, latestTime + 1, latestTime + 2)).to.be.revertedWith(
         "Start time must be in the future"
       );
     });
@@ -73,10 +70,10 @@ describe("Prediction", function () {
       });
 
       it("Should revert with the right error if called after predictions are over", async function () {
-        const { prediction, endPredictions } = await loadFixture(
+        const { prediction, endTime } = await loadFixture(
           deploy
         );
-        await time.increaseTo(endPredictions);
+        await time.increaseTo(endTime);
 
         await expect(prediction.predict(true)).to.be.revertedWith(
           "You can't predict anymore"
@@ -111,14 +108,9 @@ describe("Prediction", function () {
 
         await prediction.setIsCorrect(false);
 
-        const expectedRevenue = BigNumber(ethers.parseUnits("5", "ether").toString())
-          .multipliedBy(ethers.parseUnits("2.3", "ether").toString())
-          .dividedBy(ethers.parseUnits("3.3", "ether").toString())
-          .plus(ethers.parseUnits("2.3", "ether").toString());
-
         await expect(prediction.connect(account1).claim())
           .to.be.revertedWith(
-            "You didn't predict correctly"
+            "Nothing to claim"
           );
       });
 
