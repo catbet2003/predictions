@@ -12,7 +12,7 @@ async function main() {
   const expiryTime = startTime + ONE_WEEK_IN_SECS;
   const Registry = await ethers.getContractFactory("PredictionsRegistry");
   const registry = await Registry.deploy();
-  const tx = await registry.createPrediction("Ismail Haniyeh", startTime, endTime, expiryTime);
+  const tx = await registry.createPredictionMarket("Ismail Haniyeh", startTime, endTime, expiryTime);
 
   await registry.waitForDeployment();
 
