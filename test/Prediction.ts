@@ -22,12 +22,12 @@ describe("Prediction", function () {
     // Contracts are deployed using the first signer/account by default
     const [owner, account1, account2, account3] = await ethers.getSigners();
 
-    const Registry = await ethers.getContractFactory("PredictionsRegistry");
+    const Registry = await ethers.getContractFactory("PredictionMarketsRegistry");
     const registry = await Registry.deploy();
-    const tx = await registry.createPrediction("Ismail Haniyeh", startTime, endTime, expiryTime);
+    const tx = await registry.createPredictionMarket("Ismail Haniyeh", startTime, endTime, expiryTime);
     const rc: any = await tx.wait();
     const predictionAddress = rc.logs[1].args[0];
-    const prediction = await ethers.getContractAt("Prediction", predictionAddress);
+    const prediction = await ethers.getContractAt("PredictionMarket", predictionAddress);
     /* const Prediction = await ethers.getContractFactory("Prediction");
     const prediction = await Prediction.deploy("Ismail Haniyeh", startTime, endPredictions, endTime); */
 
@@ -52,7 +52,7 @@ describe("Prediction", function () {
     it("Should fail if the startTime is not in the future", async function () {
       const [owner] = await ethers.getSigners();
       const latestTime = await time.latest();
-      const Prediction = await ethers.getContractFactory("Prediction");
+      const Prediction = await ethers.getContractFactory("PredictionMarket");
       await expect(Prediction.deploy(owner, "test", latestTime, latestTime + 1, latestTime + 2)).to.be.revertedWith(
         "Start time must be in the future"
       );
@@ -65,7 +65,7 @@ describe("Prediction", function () {
         const { prediction } = await loadFixture(deploy);
 
         await expect(prediction.predict(true)).to.be.revertedWith(
-          "You can't predict yet"
+          "Prediction window is closed"
         );
       });
 
@@ -76,7 +76,7 @@ describe("Prediction", function () {
         await time.increaseTo(endTime);
 
         await expect(prediction.predict(true)).to.be.revertedWith(
-          "You can't predict anymore"
+          "Prediction window is closed"
         );
       });
 
@@ -87,7 +87,7 @@ describe("Prediction", function () {
         await time.increaseTo(startTime);
 
         await expect(prediction.predict(true)).to.be.revertedWith(
-          "You must send some ether"
+          "Must send ETH to predict"
         );
       });
 
@@ -106,7 +106,7 @@ describe("Prediction", function () {
 
         await time.increaseTo(endTime);
 
-        await prediction.setIsCorrect(false);
+        await prediction.setOutcome(false);
 
         await expect(prediction.connect(account1).claim())
           .to.be.revertedWith(
@@ -131,7 +131,7 @@ describe("Prediction", function () {
 
         await time.increaseTo(endTime);
 
-        await prediction.setIsCorrect(false);
+        await prediction.setOutcome(false);
 
         const account2Earned = await prediction.earned(account2, false);
         const account3Earned = await prediction.earned(account3, false);
@@ -153,7 +153,7 @@ describe("Prediction", function () {
         const amount = ethers.parseUnits("1000", "ether");
 
         await expect(prediction.connect(account1).predict(false, { value: amount }))
-          .to.emit(prediction, "Predict")
+          .to.emit(prediction, "Predicted")
           .withArgs(account1.address, false, amount);
       });
       it("Should emit an event on claim", async function () {
@@ -163,20 +163,20 @@ describe("Prediction", function () {
 
         await time.increaseTo(startTime);
 
-        await prediction.connect(account1).predict(true, { value: ethers.parseUnits("5", "ether") });
+        await prediction.connect(account1).predict(true, { value: ethers.parseUnits("20", "ether") });
 
-        await prediction.connect(account2).predict(false, { value: ethers.parseUnits("1", "ether") });
+        await prediction.connect(account2).predict(false, { value: ethers.parseUnits("31", "ether") });
 
-        await prediction.connect(account3).predict(false, { value: ethers.parseUnits("2.3", "ether") });
+        await prediction.connect(account3).predict(false, { value: ethers.parseUnits("12", "ether") });
 
         await time.increaseTo(endTime);
 
-        await prediction.setIsCorrect(false);
+        await prediction.setOutcome(false);
 
-        const expectedRevenue = BigNumber(ethers.parseUnits(String((1 / 3.3 * 5 + 1)), "ether").toString());
+        const expectedRevenue = BigNumber(ethers.parseUnits(String((31 / 43 * 20 + 31)), "ether").toString());
 
         await expect(prediction.connect(account2).claim())
-          .to.emit(prediction, "Claim")
+          .to.emit(prediction, "Claimed")
           .withArgs(account2.address, expectedRevenue.toFixed(0));
       });
 
@@ -195,10 +195,10 @@ describe("Prediction", function () {
 
         await time.increaseTo(endTime);
 
-        await prediction.setIsCorrect(true);
+        await prediction.setOutcome(true);
 
         await expect(prediction.connect(account1).claim())
-          .to.emit(prediction, "Claim")
+          .to.emit(prediction, "Claimed")
           .withArgs(account1.address, ethers.parseUnits("8.3", "ether"));
       });
     });
@@ -219,7 +219,7 @@ describe("Prediction", function () {
 
         await time.increaseTo(endTime);
 
-        await prediction.setIsCorrect(false);
+        await prediction.setOutcome(false);
 
         const expectedRevenue = BigNumber(ethers.parseUnits("5", "ether").toString())
           .multipliedBy(ethers.parseUnits("2.3", "ether").toString())
