@@ -150,6 +150,13 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
     /* ========== VIEWS ========== */
 
     /**
+     * @dev Returns the prediction market parameters.
+     */
+    function predictionData() external view returns (string memory, uint256, uint256, uint256, uint8) {
+        return (marketName, startTime, endTime, expiryTime, answer);
+    }
+
+    /**
      * @dev Returns the balance staked by a user for a given prediction.
      * @param account Address of the user.
      * @param _prediction The user's prediction (true for correct, false for incorrect).
