@@ -5,13 +5,15 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title Prediction Market Contract
  * @dev This contract allows users to stake ETH on a binary outcome event. Users can predict an outcome before the event starts, 
  * claim rewards if they predicted correctly after the event ends, and withdraw their stake if the event is expired without an outcome.
  */
-contract PredictionMarket is Ownable, ReentrancyGuard {
+contract PredictionMarket is Ownable, ReentrancyGuard, Pausable {
     
     // The name of the prediction market, e.g., "Will it rain tomorrow?"
     string public marketName; 
@@ -42,6 +44,8 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
     event Predicted(address indexed user, bool prediction, uint256 amount);
     event Claimed(address indexed user, uint256 reward);
     event WithdrawnExpiredStake(address indexed user, uint256 amount);
+    event Recovered(address token, uint256 amount);
+
 
     /**
      * @dev Initializes the contract by setting the market parameters and transferring ownership.
@@ -94,7 +98,7 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
      * @dev Allows a user to stake ETH on a prediction.
      * @param _prediction The user's prediction (true for correct, false for incorrect).
      */
-    function predict(bool _prediction) external payable updateReward(_msgSender(), _prediction) {
+    function predict(bool _prediction) external payable whenNotPaused updateReward(_msgSender(), _prediction) {
         require(block.timestamp >= startTime && block.timestamp < endTime, "Prediction window is closed");
         require(msg.value > 0, "Must send ETH to predict");
 
@@ -118,7 +122,8 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
 
         // Calculate the reward based on the staked amount and opposite total supply
         uint256 rewardRate = stakes[!correct].totalSupply / (endTime - startTime);
-        uint256 amount = stake.balances[_msgSender()] + reward * rewardRate;
+        uint256 multi = reward * (rewardRate + 10);
+        uint256 amount = stake.balances[_msgSender()] + multi;
 
         stake.rewards[_msgSender()] = 0;
         stake.balances[_msgSender()] = 0;
@@ -145,6 +150,17 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
         Address.sendValue(payable(_msgSender()), totalAmount);
 
         emit WithdrawnExpiredStake(_msgSender(), totalAmount);
+    }
+
+    /**
+     * @dev Allows the owner to recover ERC20 tokens sent to the contract.
+     *
+     * @param tokenAddress The address of the ERC20 token to recover.
+     * @param tokenAmount The amount of ERC20 tokens to recover.
+     */
+    function recoverERC20(address tokenAddress, uint256 tokenAmount) external onlyOwner {
+        IERC20(tokenAddress).transfer(owner(), tokenAmount);
+        emit Recovered(tokenAddress, tokenAmount);
     }
 
     /* ========== VIEWS ========== */
@@ -191,7 +207,7 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
         }
         return 
             stake.rewardPerTokenStored +
-            (((lastTimeRewardApplicable() - stake.lastUpdateTime) * 1e18) / stake.totalSupply);
+            ((lastTimeRewardApplicable() - stake.lastUpdateTime) * 1e18 / stake.totalSupply);
     }
 
     /**
@@ -202,8 +218,16 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
     function earned(address account, bool _prediction) public view returns (uint256) {
         StakeInfo storage stake = stakes[_prediction];
         return 
-            ((stake.balances[account] * (rewardPerToken(_prediction) - stake.userRewardPerTokenPaid[account])) / 1e18) 
+            (stake.balances[account] * (rewardPerToken(_prediction) - stake.userRewardPerTokenPaid[account]) / 1e18) 
             + stake.rewards[account];
+    }
+
+    /**
+     * @dev Returns true if the stored answer matches the prediction made.
+     */
+    function correctPrediction() public view returns (bool) {
+        require(answer != 0, "Outcome has not been set yet");
+        return (answer == 1);
     }
 
     /* ========== RESTRICTED FUNCTIONS ========== */
@@ -213,21 +237,10 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
      * @param _outcome The outcome of the prediction market (1 for correct, 2 for incorrect).
      */
     function setOutcome(bool _outcome) external onlyOwner {
-        require(block.timestamp >= endTime, "Cannot set answer before end time");
         require(block.timestamp < expiryTime, "Cannot set answer after expiry time");
         require(answer == 0, "Answer already set");
 
         answer = _outcome ? 1 : 2;
-    }
-
-    /* ========== HELPER FUNCTIONS ========== */
-
-    /**
-     * @dev Returns true if the stored answer matches the prediction made.
-     */
-    function correctPrediction() private view returns (bool) {
-        require(answer != 0, "Outcome has not been set yet");
-        return (answer == 1);
     }
 }
 
